@@ -75,7 +75,7 @@ module.exports = {
                 { name:' • Nations Sum',   value:`${Math.floor(nationSum)}G`, inline:true  }
             )
                 .setFooter({
-                    text: ``,
+                    text: `Economy last updated ${new Date(updatedAt).toLocaleTimeString()}`,
                     iconURL: weatherUrl
                 })
                 .setTimestamp();
