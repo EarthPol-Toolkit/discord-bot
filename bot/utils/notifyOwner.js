@@ -124,6 +124,10 @@ async function notifyOwnerIfAdmin(guild, client) {
     try {
         await owner.send(body);
         state.lastNotified = now;
+        state.guildId = guild.id;
+        state.guildName = guild.name;
+        state.ownerId = owner.id;
+        state.ownerTag = owner.tag ?? owner.username;
         fs.writeFileSync(file, JSON.stringify(state, null, 2));
         console.log(`✉️  Notified owner of ${guild.id} about Administrator permission.`);
     } catch (err) {
