@@ -1,5 +1,6 @@
 const fs   = require('fs');
 const path = require('path');
+const { PermissionFlagsBits } = require('discord.js');
 
 /**
  * DM the guild owner about an error, but no more often than every 5 days.
