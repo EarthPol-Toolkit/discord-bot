@@ -61,6 +61,7 @@ token = process.env.DISCORD_TOKEN;
 const rest = new REST().setToken(token);
 const commandData = client.commands.map(cmd => cmd.data.toJSON());
 const { startScheduler } = require('./bot/utils/syncRoles');
+const { notifyOwnerIfAdmin } = require('./bot/utils/notifyOwner');
 
 // register slash commands on bot ready for all guilds
 client.once('ready', async () => {
@@ -72,6 +73,8 @@ client.once('ready', async () => {
                 { body: commandData }
             );
             console.log(`→ Registered commands to guild ${guild.name} (${guild.id})`);
+
+            notifyOwnerIfAdmin(guild, client);
         }
     } catch (err) {
         console.error('❌ Error registering slash commands:', err);
@@ -94,6 +97,8 @@ client.on('guildCreate', async (guild) => {
             { body: commandData }
         );
         console.log(`→ Registered commands to new guild ${guild.name} (${guild.id})`);
+
+        notifyOwnerIfAdmin(guild, client);
     } catch (err) {
         console.error(`✖ Failed to register on new guild ${guild.id}:`, err);
     }
