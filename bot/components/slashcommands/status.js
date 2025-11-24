@@ -27,16 +27,18 @@ module.exports = {
             let tod = tickTime<6000?'Morning': tickTime<12000?'Noon': tickTime<18000?'Afternoon':'Night';
 
             let weatherLabel, weatherIcon, weatherDurTicks;
-            if (status.isThundering) {
-                weatherLabel='Thunderstorm'; weatherIcon='thunderstorm.png'; weatherDurTicks=thunderDuration;
-            } else if (status.hasStorm) {
-                weatherLabel='Storm'; weatherIcon='rain.png'; weatherDurTicks=stormDuration;
+            if(status.hasStorm){
+                if (status.isThundering) {
+                    weatherLabel='Thunderstorm'; weatherIcon='thunderstorm.png'; weatherDurTicks=thunderDuration;
+                } else {
+                    weatherLabel='Storm'; weatherIcon='rain.png'; weatherDurTicks=stormDuration;
+                }
             } else {
-                weatherLabel='Clear'; weatherIcon='sun.png'; weatherDurTicks=null;
+                weatherLabel='Clear'; weatherIcon='sun.png'; weatherDurTicks=stormDuration;
             }
 
-            const moonUrl = `https://goodrich.dev/bot/img/moon_phase/${moonPhase}.png`;
-            const weatherUrl = `https://goodrich.dev/bot/img/weather/${weatherIcon}`;
+            const moonUrl = `https://cdn.earthpol.com/img/moon_phase/${moonPhase}.png`;
+            const weatherUrl = `https://cdn.earthpol.com/img/weather/${weatherIcon}`;
 
             const embed = new EmbedBuilder()
                 .setTitle('🌐 Server Status')
