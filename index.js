@@ -61,6 +61,7 @@ token = process.env.DISCORD_TOKEN;
 const rest = new REST().setToken(token);
 const commandData = client.commands.map(cmd => cmd.data.toJSON());
 const { startScheduler } = require('./bot/utils/syncRoles');
+const { startVotePartyMonitor } = require('./bot/utils/votePartyMonitor');
 const { notifyOwnerIfAdmin } = require('./bot/utils/notifyOwner');
 
 // register slash commands on bot ready for all guilds
@@ -82,6 +83,7 @@ client.once('ready', async () => {
 
     // Run role sync every x ms
     startScheduler(client);
+    startVotePartyMonitor(client);
 
     // initialize shop monitor
     //await monitor.seedShops();

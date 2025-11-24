@@ -25,6 +25,9 @@ function loadConfig(guildId) {
             role_allied_id: null,
             role_enemy_id: null,
             role_linked_id: null,
+            role_vote_party_id: null,
+            channel_vote_party_id: null,
+            vote_party_amount: null,
             toolkit_admins: { roles: [], users: [] }
         };
     }
@@ -60,11 +63,14 @@ export const data = new SlashCommandBuilder()
                 { name: 'Role: Citizen',     value: 'role_citizen' },
                 { name: 'Role: Allied',      value: 'role_allied'  },
                 { name: 'Role: Enemy',       value: 'role_enemy'   },
-                { name: 'Role: Linked',      value: 'role_linked'  }
+                { name: 'Role: Linked',      value: 'role_linked'  },
+                { name: 'Role: Vote Party',           value: 'role_vote_party'     },
+                { name: 'Channel: Vote Party',        value: 'channel_vote_party'  },
+                { name: 'Setting: Vote Party Amount', value: 'vote_party_amount'   }
             ))
         .addStringOption(opt => opt
             .setName('value')
-            .setDescription('Nation name or Role ID')
+            .setDescription('Nation name Role or Channel ID, or Amount')
             .setRequired(true)))
 
     // createroles command
@@ -153,18 +159,47 @@ export async function execute(interaction) {
             return interaction.editReply(`✅ Nation set to **${nation.name}** (${nation.uuid}).`);
         }
 
+        if (key === 'channel_vote_party') {
+            const raw = interaction.options.getString('value');
+            const match = raw.match(/^<#(\d+)>$/);
+            const channelId = match ? match[1] : raw;
+
+            config.channel_vote_party_id = channelId;
+            saveConfig(guildId, config);
+            return interaction.editReply(`✅ Vote Party channel set to <#${channelId}>.`);
+        }
+
+        if (key === 'vote_party_amount') {
+            const raw = interaction.options.getString('value');
+            const amount = Number(raw);
+
+            if (!Number.isFinite(amount) || amount <= 0) {
+                return interaction.editReply('❌ Vote Party Amount must be a positive number (for example `10`).');
+            }
+
+            config.vote_party_amount = amount;
+            saveConfig(guildId, config);
+            return interaction.editReply(`✅ Vote Party Amount set to **${amount}** votes remaining.`);
+        }
+
         // role settings
         const mapping = {
-            role_citizen: 'role_citizen_id',
-            role_allied : 'role_allied_id',
-            role_enemy  : 'role_enemy_id',
-            role_linked : 'role_linked_id'
+            role_citizen    : 'role_citizen_id',
+            role_allied     : 'role_allied_id',
+            role_enemy      : 'role_enemy_id',
+            role_linked     : 'role_linked_id',
+            role_vote_party : 'role_vote_party_id'
         };
         if (mapping[key]) {
             const id = extractId(interaction.options.getString('value'));
             config[mapping[key]] = id;
             saveConfig(guildId, config);
-            return interaction.editReply(`✅ **${key}** set to <@&${id}>.`);
+
+            const niceName = key === 'role_vote_party'
+                ? 'Role: Vote Party'
+                : `Role: ${key.split('_')[1].charAt(0).toUpperCase()}${key.split('_')[1].slice(1)}`;
+
+            return interaction.editReply(`✅ **${niceName}** set to <@&${id}>.`);
         }
     }
 
