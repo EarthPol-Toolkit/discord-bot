@@ -1,0 +1,11 @@
+{
+  "nation_uuid": null,
+  "role_citizen_id": null,
+  "role_allied_id": null,
+  "role_enemy_id": null,
+  "role_linked_id": null,
+  "toolkit_admins": {
+    "roles": [],
+    "users": []
+  }
+}

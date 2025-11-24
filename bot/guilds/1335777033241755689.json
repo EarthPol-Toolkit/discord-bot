@@ -1,0 +1,11 @@
+{
+  "nation_uuid": "1bd8a430-05a5-43da-b74d-5054e843f81d",
+  "role_citizen_id": "1335781423810089000",
+  "role_allied_id": "1377837318089478234",
+  "role_enemy_id": "1384020137946124418",
+  "role_linked_id": "1367710674511204402",
+  "toolkit_admins": {
+    "roles": [],
+    "users": []
+  }
+}

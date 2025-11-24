@@ -1,3 +1,5 @@
 .env
 /.idea
 /node_modules
+/bot/cache
+bot/cache/towns.json

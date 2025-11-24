@@ -1,6 +1,9 @@
 const axios = require('axios');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { postQuery } = require('../components/commons/api');
+const shopCmd      = require('../components/slashcommands/shop');
+const { ownerNames, ownerUUIDs } = shopCmd;
+
 
 module.exports = {
     name: 'interactionCreate',
@@ -102,7 +105,8 @@ module.exports = {
             const owners    = await postQuery(process.env.PLAYERS_API,   details.map(d => d.owner));
 
             // build embed
-            const ownerName = ownerNames[ownerUUIDs.indexOf(uuid)];
+            const ownerIndex = ownerUUIDs.indexOf(uuid);
+            const ownerName  = ownerIndex !== -1 ? ownerNames[ownerIndex] : uuid;
             const embed = new EmbedBuilder()
                 .setTitle(`Shops by ${ownerName} (page ${newPage + 1})`)
                 .setColor(0x1ABC9C);
