@@ -5,16 +5,9 @@ const axios = require('axios');
 
 const GUILDS_DIR = path.join(__dirname, '../guilds');
 
-// Global vote API
 const VOTE_API_URL = process.env.VOTE_API_URL || 'https://api.earthpol.com/astra/voting';
 
-// Check every 1 minute
 const VOTE_PARTY_INTERVAL_MS = 60 * 1000;
-
-// We only want to notify when we cross the threshold from above to below.
-// One global "lastVotesNeeded" works because "votes needed" is monotonic
-// down to zero, then resets back up when a party triggers.
-let lastVotesNeeded = null;
 
 function loadAllGuildConfigs() {
     if (!fs.existsSync(GUILDS_DIR)) return [];
@@ -34,6 +27,14 @@ function loadAllGuildConfigs() {
             }
         })
         .filter(Boolean);
+}
+
+function saveGuildConfig(guildId, config) {
+    if (!fs.existsSync(GUILDS_DIR)) {
+        fs.mkdirSync(GUILDS_DIR, { recursive: true });
+    }
+    const file = path.join(GUILDS_DIR, `${guildId}.json`);
+    fs.writeFileSync(file, JSON.stringify(config, null, 2));
 }
 
 async function fetchVotingStats() {
@@ -62,10 +63,6 @@ async function checkVoteParty(client) {
     if (configs.length === 0) return;
 
     for (const { guildId, config } of configs) {
-        // Optional fields controlled by /toolkit set:
-        //   role_vote_party_id
-        //   channel_vote_party_id
-        //   vote_party_amount (number of votes remaining at which to ping)
         const channelId = config.channel_vote_party_id;
         const roleId    = config.role_vote_party_id;
 
@@ -74,53 +71,50 @@ async function checkVoteParty(client) {
             threshold = Number(config.vote_party_amount);
         }
 
-        // No channel or threshold configured, nothing to do here
         if (!channelId || !Number.isFinite(threshold) || threshold <= 0) {
             continue;
         }
 
-        // Only notify when we cross from "above threshold" to "at or under threshold"
-        // Example: threshold = 10
-        // lastVotesNeeded = 15, now votesNeeded = 9 -> notify
-        // lastVotesNeeded = 8, now votesNeeded = 7 -> no new notify
+        if (typeof config.vote_party_notified !== 'boolean') {
+            config.vote_party_notified = false;
+        }
+
         if (votesNeeded > threshold) {
-            // Not close enough yet for this guild
-            continue;
-        }
-        if (lastVotesNeeded !== null && lastVotesNeeded <= threshold) {
-            // We already passed this threshold previously, no spam
+            if (config.vote_party_notified) {
+                config.vote_party_notified = false;
+                saveGuildConfig(guildId, config);
+            }
             continue;
         }
 
-        // Try to fetch guild
+        if (config.vote_party_notified) {
+            continue;
+        }
+
         const guild = await client.guilds.fetch(guildId).catch(() => null);
-        if (!guild) {
-            continue;
-        }
+        if (!guild) continue;
 
-        // Try to fetch channel
         const channel = await guild.channels.fetch(channelId).catch(() => null);
-        if (!channel || !channel.isTextBased()) {
-            continue;
-        }
+        if (!channel || !channel.isTextBased()) continue;
 
         const roleMention = roleId ? `<@&${roleId}> ` : '';
         const msg = [
-            `${roleMention}Vote Party is getting close!`,
-            `There are only **${votesNeeded}** votes left until the Vote Party triggers (total required: **${votesReq}**).`,
-            `You asked to be notified at **${threshold}** votes remaining.`
+            `${roleMention}`,
+            `# Vote Party is getting close!`,
+            `There are only **${votesNeeded}** votes left until the Vote Party triggers (total required: **${votesReq}**)! Get online now and vote!`
         ].join(' ');
 
         try {
             await channel.send({ content: msg });
+
+            config.vote_party_notified = true;
+            saveGuildConfig(guildId, config);
+
             console.log(`📣 Sent vote party alert to guild ${guild.name} (${guild.id})`);
         } catch (err) {
             console.error(`❌ Failed to send vote party alert in guild ${guildId}:`, err.message);
         }
     }
-
-    // Update global lastVotesNeeded after processing all guilds
-    lastVotesNeeded = votesNeeded;
 }
 
 function startVotePartyMonitor(client) {

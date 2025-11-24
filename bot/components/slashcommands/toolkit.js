@@ -28,6 +28,7 @@ function loadConfig(guildId) {
             role_vote_party_id: null,
             channel_vote_party_id: null,
             vote_party_amount: null,
+            vote_party_notified: false,
             toolkit_admins: { roles: [], users: [] }
         };
     }
