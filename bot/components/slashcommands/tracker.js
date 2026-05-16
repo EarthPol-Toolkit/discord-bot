@@ -3,7 +3,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const fs    = require('fs');
 const path  = require('path');
 const axios = require('axios');
-const { postQuery } = require('../commons/api');
+const { astraBaseUrl, endpointUrl, postQuery } = require('../commons/api');
 
 // ─── load blacklist of hidden player names ────────────────────────────────
 const hiddenPlayers = fs
@@ -22,11 +22,11 @@ function normalizeUuid(id) {
 }
 
 // ─── API Endpoints ─────────────────────────────────────────────────────────
-const API_BASE    = process.env.API_BASE_URL || 'https://api.earthpol.com/astra';
+const API_BASE    = astraBaseUrl();
 const DISCORD_EP  = `${API_BASE}/discord`;
 const PLAYERS_EP  = `${API_BASE}/players`;
 const NATIONS_EP  = `${API_BASE}/nations`;
-const LOCATION_EP = process.env.LOCATION_API;
+const LOCATION_EP = endpointUrl('LOCATION_API', 'location');
 
 module.exports = {
     data: new SlashCommandBuilder()

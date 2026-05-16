@@ -1,6 +1,14 @@
 // bot/components/slashcommands/status.js
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const axios = require('axios');
+const {
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    EmbedBuilder,
+    SlashCommandBuilder
+} = require('discord.js');
+const { endpointUrl, getJson } = require('../commons/api');
+const fmt = require('../commons/format');
+const { toolkitUrl } = require('../commons/links');
 const { getEconomyCache, waitReady: waitEco } = require('../../utils/economyCache');
 
 module.exports = {
@@ -13,16 +21,11 @@ module.exports = {
 
         try {
             // ─── fetch core status ───────────────────────────────────────────────
-            const { data } = await axios.get('https://api.earthpol.com/astra/');
+            const data = await getJson(endpointUrl('SERVER_API', ''));
             const { version, moonPhase, time: tObj, status, stats } = data;
             const { newDayTime, serverTimeOfDay, stormDuration, thunderDuration, time: tickTime, eraDate, eraDay } = tObj;
 
             // ─── build base embed ────────────────────────────────────────────────
-            const fmtDur = secs => {
-                const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60), s = secs%60;
-                return [h&&`${h}h`, m&&`${m}m`,`${s}s`].filter(Boolean).join(' ');
-            };
-            const fmtTicks = t => fmtDur(Math.floor(t/20));
             const nextDaySecs = newDayTime - serverTimeOfDay;
             let tod = tickTime<6000?'Morning': tickTime<12000?'Noon': tickTime<18000?'Afternoon':'Night';
 
@@ -41,25 +44,29 @@ module.exports = {
             const weatherUrl = `https://cdn.earthpol.com/img/weather/${weatherIcon}`;
 
             const embed = new EmbedBuilder()
-                .setTitle('🌐 Server Status')
+                .setTitle('EarthPol Status')
                 .setColor(0x1ABC9C)
                 .setThumbnail(moonUrl)
+                .setDescription([
+                    `**${stats.numOnlinePlayers}/${stats.maxPlayers}** players online`,
+                    `${weatherLabel} weather, ${tod.toLowerCase()} in-game`
+                ].join('\n'))
                 .addFields(
                     { name:'Version',        value:version,                                      inline:true },
-                    { name:'Time of Day',    value:`${tod} (${fmtTicks(24000-tickTime)})`,       inline:true },
+                    { name:'Time of Day',    value:`${tod} (${fmt.ticks(24000-tickTime)})`,      inline:true },
                     { name:'Era Time',       value:`${eraDate} (Day ${eraDay})`,                  inline:true },
-                    { name:'Towny Day In',   value:fmtDur(nextDaySecs),                          inline:true },
-                    { name:'Players Online', value:`${stats.numOnlinePlayers}/${stats.maxPlayers}`,inline:true },
-                    { name:'Residents',      value:`${stats.numResidents}`,                      inline:true },
-                    { name:'Towns',          value:`${stats.numTowns}`,                          inline:true },
-                    { name:'Nations',        value:`${stats.numNations}`,                        inline:true },
+                    { name:'Towny Day In',   value:fmt.durationSeconds(nextDaySecs),             inline:true },
+                    { name:'Players Online', value:`${fmt.number(stats.numOnlinePlayers)}/${fmt.number(stats.maxPlayers)}`, inline:true },
+                    { name:'Residents',      value:fmt.number(stats.numResidents),               inline:true },
+                    { name:'Towns',          value:fmt.number(stats.numTowns),                   inline:true },
+                    { name:'Nations',        value:fmt.number(stats.numNations),                 inline:true },
                     { name:'Mob Spawning',   value: status.mobSpawning?'On':'Off',               inline:true }
                 );
 
             if (weatherDurTicks != null) {
                 embed.addFields({
                     name:`${weatherLabel} Duration`,
-                    value: fmtTicks(weatherDurTicks),
+                    value: fmt.ticks(weatherDurTicks),
                     inline: true
                 });
             }
@@ -69,18 +76,37 @@ module.exports = {
             const { playerSum, townSum, nationSum, grandSum, updatedAt } = getEconomyCache();
 
             embed.addFields(
-                { name:'💰 Total Economy', value:`${Math.floor(grandSum)}G`, inline:false },
-                { name:' • Players Sum',   value:`${Math.floor(playerSum)}G`, inline:true  },
-                { name:' • Towns Sum',     value:`${Math.floor(townSum)}G`,   inline:true  },
-                { name:' • Nations Sum',   value:`${Math.floor(nationSum)}G`, inline:true  }
+                { name:'Total Economy', value:fmt.gold(grandSum), inline:false },
+                { name:'Players Sum',   value:fmt.gold(playerSum), inline:true  },
+                { name:'Towns Sum',     value:fmt.gold(townSum),   inline:true  },
+                { name:'Nations Sum',   value:fmt.gold(nationSum), inline:true  }
             )
                 .setFooter({
-                    text: `Economy last updated ${new Date(updatedAt).toLocaleTimeString()}`,
+                    text: `Economy last updated ${updatedAt ? new Date(updatedAt).toLocaleTimeString() : 'unknown'}`,
                     iconURL: weatherUrl
                 })
                 .setTimestamp();
 
-            return interaction.editReply({ embeds:[embed] });
+            const components = [];
+            const homeUrl = toolkitUrl('/');
+            const buttons = [];
+            if (homeUrl) {
+                buttons.push(
+                    new ButtonBuilder()
+                        .setLabel('Open Toolkit')
+                        .setStyle(ButtonStyle.Link)
+                        .setURL(homeUrl)
+                );
+            }
+            buttons.push(
+                new ButtonBuilder()
+                    .setLabel('Live Map')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL('https://earthpol.com/map/')
+            );
+            components.push(new ActionRowBuilder().addComponents(buttons));
+
+            return interaction.editReply({ embeds:[embed], components });
         }
         catch (err) {
             console.error('[Status] error', err);

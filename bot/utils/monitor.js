@@ -1,11 +1,12 @@
 // bot/utils/monitor.js
 const axios = require('axios');
-const { postQuery } = require('../components/commons/api');
+const { endpointUrl, postQuery } = require('../components/commons/api');
+const fmt = require('../components/commons/format');
 const { EmbedBuilder } = require('discord.js');
 
-const SHOP_API     = process.env.SHOP_API;
-const LOCATION_API = process.env.LOCATION_API;
-const PLAYERS_API  = process.env.PLAYERS_API;
+const SHOP_API     = endpointUrl('SHOP_API', 'shops');
+const LOCATION_API = endpointUrl('LOCATION_API', 'location');
+const PLAYERS_API  = endpointUrl('PLAYERS_API', 'players');
 const CHANNEL_ID   = process.env.ANNOUNCE_CHANNEL_ID || '1367695454737010698';
 
 let clientRef = null;
@@ -57,8 +58,8 @@ async function checkShops() {
 
         // Helper to post an embed
         const postEmbed = (d, locs, owners, type) => {
-            const item = d.item.match(/ItemStack\{(.+)\}/)?.[1] || d.item;
-            const priceG = `${d.price}G`;
+            const item = fmt.cleanItemStack(d.item);
+            const priceG = fmt.gold(d.price);
             const title  = type === 'new'
                 ? `🆕 New Shop #${d.id}`
                 : `❌ Removed Shop #${d.id}`;

@@ -1,13 +1,14 @@
 // bot/components/slashcommands/chatsearch.js
-const { SlashCommandBuilder } = require('@discordjs/builders');
 const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    ComponentType
+    ComponentType,
+    SlashCommandBuilder
 } = require('discord.js');
 const axios = require('axios');
+const { endpointUrl } = require('../commons/api');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -67,7 +68,7 @@ module.exports = {
         if (startRaw)    q.startTimestamp = startRaw;
         if (endRaw)      q.endTimestamp   = endRaw;
 
-        const CHAT_API = process.env.CHAT_API?.trim() || 'https://api.earthpol.com/astra/chat';
+        const CHAT_API = endpointUrl('CHAT_API', 'chat');
         console.log('ChatSearch POST to:', CHAT_API, 'payload:', { query: q });
 
         let logs;

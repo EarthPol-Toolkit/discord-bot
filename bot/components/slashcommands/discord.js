@@ -1,5 +1,12 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { postQuery, fetchUUIDFromPlayerDB, fetchUsernameFromPlayerDB } = require('../commons/api');
+const {
+    endpointUrl,
+    postQuery,
+    fetchUUIDFromPlayerDB,
+    fetchUsernameFromPlayerDB
+} = require('../commons/api');
+
+const DISCORD_LINK_API = endpointUrl('DISCORD_LINK_API', 'discord');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -29,13 +36,13 @@ module.exports = {
             try {
                 if (mcName) {
                     const uuid = await fetchUUIDFromPlayerDB(mcName);
-                    const link = await postQuery(process.env.DISCORD_LINK_API, [uuid]);
+                    const link = await postQuery(DISCORD_LINK_API, [uuid]);
                     if (!link.discord) return interaction.editReply(`🔗 **${mcName}** is not linked.`);
                     console.log(`[Link] ${mcName} → <@${link.discord}>`);
                     return interaction.editReply(`🔗 **${mcName}** is linked to <@${link.discord}>`);
                 } else {
                     const id = discordUser.id;
-                    const link = await postQuery(process.env.DISCORD_LINK_API, [id]);
+                    const link = await postQuery(DISCORD_LINK_API, [id]);
                     if (!link.uuid) return interaction.editReply(`🔗 <@${id}> is not linked.`);
                     const uname = await fetchUsernameFromPlayerDB(link.uuid);
                     console.log(`[Link] <@${id}> → ${uname}`);
@@ -65,7 +72,7 @@ module.exports = {
             for (const m of members.values()) {
                 if (m.user.bot) continue;
                 try {
-                    const link = await postQuery(process.env.DISCORD_LINK_API, [m.id]);
+                    const link = await postQuery(DISCORD_LINK_API, [m.id]);
                     if (!link.uuid) continue;
                     await m.roles.add(linkedRole);
                     const uname = await fetchUsernameFromPlayerDB(link.uuid);

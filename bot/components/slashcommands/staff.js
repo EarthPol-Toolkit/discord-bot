@@ -1,15 +1,12 @@
 // src/commands/staff.js
-import { SlashCommandBuilder } from '@discordjs/builders';
-import { EmbedBuilder }        from 'discord.js';
-import axios                   from 'axios';
-import fs                      from 'fs';
-import path                    from 'path';
-import { fileURLToPath }       from 'url';
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const { endpointUrl } = require('../commons/api');
+const fmt = require('../commons/format');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
-
-export const data = new SlashCommandBuilder()
+const data = new SlashCommandBuilder()
     .setName('staff')
     .setDescription('Staff-related commands')
     .addSubcommand(sub =>
@@ -50,7 +47,7 @@ export const data = new SlashCommandBuilder()
             )
     );
 
-export async function execute(interaction) {
+async function execute(interaction) {
     await interaction.deferReply();
 
     // Load staff identifiers
@@ -71,7 +68,7 @@ export async function execute(interaction) {
     let players = [];
     try {
         const res = await axios.post(
-            process.env.PLAYERS_API || 'https://api.earthpol.com/astra/players',
+            endpointUrl('PLAYERS_API', 'players'),
             { query: identifiers }
         );
         players = Array.isArray(res.data) ? res.data : [];
@@ -137,7 +134,7 @@ export async function execute(interaction) {
         // Build description
         const description = sorted
             .map(p => {
-                const date = new Date(p.timestamps.lastOnline).toLocaleString();
+                const date = fmt.timestamp(p.timestamps.lastOnline, 'R');
                 return `• ${p.name} — Last: ${date}`;
             })
             .join('\n');
@@ -152,3 +149,5 @@ export async function execute(interaction) {
         return interaction.editReply({ embeds: [embed] });
     }
 }
+
+module.exports = { data, execute };

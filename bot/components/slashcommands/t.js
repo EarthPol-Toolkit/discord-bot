@@ -1,15 +1,67 @@
 // bot/components/slashcommands/t.js
-const { SlashCommandBuilder } = require('@discordjs/builders');
 const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    ComponentType
+    ComponentType,
+    SlashCommandBuilder
 } = require('discord.js');
 const { getAllTowns } = require('../../utils/townCache');
+const fmt = require('../commons/format');
+const { mapUrl, toolkitUrl, townFlagUrl } = require('../commons/links');
 
 const PAGE_SIZE = 10;
+
+function townValue(town, by) {
+    switch (by) {
+        case 'balance':    return fmt.gold(town.stats?.balance);
+        case 'residents':  return fmt.number(town.stats?.numResidents);
+        case 'townblocks': return `${fmt.number(town.stats?.numTownBlocks)} / ${fmt.number(town.stats?.maxTownBlocks)}`;
+        case 'bankrupt':   return fmt.gold(town.stats?.balance);
+        case 'founded':    return fmt.date(town.timestamps?.registered);
+        case 'open':       return fmt.bool(town.status?.isOpen);
+        case 'public':     return fmt.bool(town.status?.isPublic);
+        case 'ruined':     return fmt.bool(town.status?.isRuined);
+        default:           return town.nation?.name ? `Nation: ${town.nation.name}` : 'Independent';
+    }
+}
+
+function townButtons(town) {
+    const buttons = [];
+    const spawn = town.coordinates?.spawn;
+
+    const profileUrl = toolkitUrl('/towns', { u: town.uuid });
+    if (profileUrl) {
+        buttons.push(
+            new ButtonBuilder()
+                .setLabel('Open Toolkit')
+                .setStyle(ButtonStyle.Link)
+                .setURL(profileUrl)
+        );
+    }
+
+    if (spawn?.x != null && spawn?.z != null) {
+        buttons.push(
+            new ButtonBuilder()
+                .setLabel('Map')
+                .setStyle(ButtonStyle.Link)
+                .setURL(mapUrl(spawn.x, spawn.z, spawn.world || 'world'))
+        );
+    }
+
+    const flag = townFlagUrl(town.name);
+    if (flag) {
+        buttons.push(
+            new ButtonBuilder()
+                .setLabel('Flag')
+                .setStyle(ButtonStyle.Link)
+                .setURL(flag)
+        );
+    }
+
+    return buttons.length ? [new ActionRowBuilder().addComponents(buttons.slice(0, 5))] : [];
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -74,8 +126,9 @@ module.exports = {
             }
 
             const e = new EmbedBuilder()
-                .setTitle(`🏘️ ${town.name}`)
+                .setTitle(town.name)
                 .setColor(0x1ABC9C)
+                .setImage(townFlagUrl(town.name))
                 .setTimestamp()
                 .addFields(
                     { name: 'Founder', value: town.founder || '—', inline: true },
@@ -84,22 +137,29 @@ module.exports = {
                     {
                         name: 'Stats',
                         value:
-                            `Residents: **${town.stats.numResidents}**\n` +
-                            `TownBlocks: **${town.stats.numTownBlocks}** / ${town.stats.maxTownBlocks}\n` +
-                            `Balance: **${town.stats.balance}G**`,
+                            `Residents: **${fmt.number(town.stats?.numResidents)}**\n` +
+                            `Town Blocks: **${fmt.number(town.stats?.numTownBlocks)}** / ${fmt.number(town.stats?.maxTownBlocks)}\n` +
+                            `Balance: **${fmt.gold(town.stats?.balance)}**`,
                         inline: false
                     },
                     {
                         name: 'Status',
                         value:
-                            `Public: **${town.status.isPublic}**\n` +
-                            `Open: **${town.status.isOpen}**\n` +
-                            `Ruined: **${town.status.isRuined}**`,
+                            `Public: **${fmt.bool(town.status?.isPublic)}**\n` +
+                            `Open: **${fmt.bool(town.status?.isOpen)}**\n` +
+                            `Neutral: **${fmt.bool(town.status?.isNeutral)}**\n` +
+                            `Ruined: **${fmt.bool(town.status?.isRuined)}**\n` +
+                            `For Sale: **${fmt.bool(town.status?.isForSale)}**`,
                         inline: false
                     }
-                );
+                )
+                .setFooter({ text: `Registered ${fmt.date(town.timestamps?.registered)}` });
 
-            return interaction.reply({ embeds: [e] });
+            if (town.board) {
+                e.setDescription(fmt.truncate(town.board, 220));
+            }
+
+            return interaction.reply({ embeds: [e], components: townButtons(town) });
         }
 
         // ─── list ────────────────────────────────────────────────────────────────
@@ -140,30 +200,23 @@ module.exports = {
                     break;
             }
 
-            const totalPages = Math.ceil(list.length / PAGE_SIZE);
+            if (!list.length) {
+                return interaction.reply({ content: `No towns matched **${by}**.`, ephemeral: true });
+            }
+
+            const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
             let   page       = 0;
 
             const makeEmbed = (page) => {
                 const slice = list.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
                 const e = new EmbedBuilder()
-                    .setTitle(`📋 Towns by ${by} (Page ${page+1}/${totalPages})`)
+                    .setTitle(`Towns by ${by}`)
                     .setColor(0x1ABC9C)
+                    .setFooter({ text: `Page ${page + 1}/${totalPages} • ${fmt.number(list.length)} towns` })
                     .setTimestamp();
 
                 for (const t of slice) {
-                    let val;
-                    switch (by) {
-                        case 'balance':    val = `${t.stats.balance} Gold`; break;
-                        case 'residents':  val = `${t.stats.numResidents}`; break;
-                        case 'townblocks': val = `${t.stats.numTownBlocks}`; break;
-                        case 'bankrupt':   val = `${t.stats.balance} Gold`; break;
-                        case 'founded':    val = new Date(t.timestamps.registered).toLocaleDateString(); break;
-                        case 'open':       val = `${t.status.isOpen}`; break;
-                        case 'public':     val = `${t.status.isPublic}`; break;
-                        case 'ruined':     val = `${t.status.isRuined}`; break;
-                        default:           val = ''; break;
-                    }
-                    e.addFields({ name: t.name, value: val, inline: false });
+                    e.addFields({ name: t.name, value: townValue(t, by), inline: false });
                 }
 
                 if (list.length > (page+1)*PAGE_SIZE) {

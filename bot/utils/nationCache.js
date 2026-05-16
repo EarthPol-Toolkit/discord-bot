@@ -1,6 +1,8 @@
 // utils/nationCache.js
 const axios = require('axios');
-const NATION_API = process.env.NATIONS_API.trim();
+const { endpointUrl } = require('../components/commons/api');
+
+const NATION_API = endpointUrl('NATIONS_API', 'nations');
 
 let _nations = [];
 let _readyResolve;
@@ -15,12 +17,17 @@ async function refreshNations() {
         _readyResolve();
     } catch (err) {
         console.error('[NationCache] failed to fetch nations', err);
+        _readyResolve();
     }
 }
 
 // initial + hourly
-refreshNations();
-setInterval(refreshNations, 60 * 60 * 1000);
+if (process.env.CHECK_COMMANDS !== '1') {
+    refreshNations();
+    setInterval(refreshNations, 60 * 60 * 1000);
+} else {
+    _readyResolve();
+}
 
 function getAllNations() {
     return _nations;

@@ -1,12 +1,12 @@
-const fs    = require('fs');
-const path  = require('path');
 const axios = require('axios');
 const { notifyOwnerOfError } = require('./notifyOwner');
+const { endpointUrl } = require('../components/commons/api');
+const { loadAllConfigs } = require('./guildConfig');
 
 // Environment
-const NATIONS_API      = process.env.NATIONS_API;
-const DISCORD_API      = process.env.DISCORD_LINK_API;
-const PLAYERS_API      = process.env.PLAYERS_API;
+const NATIONS_API      = endpointUrl('NATIONS_API', 'nations');
+const DISCORD_API      = endpointUrl('DISCORD_LINK_API', 'discord');
+const PLAYERS_API      = endpointUrl('PLAYERS_API', 'players');
 const SYNC_INTERVAL_MS = Number(process.env.SYNC_INTERVAL_MS) || 10 * 60 * 1000;
 
 // Normalize 32‑hex → dashed UUID
@@ -17,20 +17,6 @@ function normalizeUuid(id) {
         /^([0-9a-fA-F]{8})([0-9a-fA-F]{4})([0-9a-fA-F]{4})([0-9a-fA-F]{4})([0-9a-fA-F]{12})$/
     );
     return m ? `${m[1]}-${m[2]}-${m[3]}-${m[4]}-${m[5]}` : id;
-}
-
-// Load all guild‐config JSONs
-function loadAllConfigs() {
-    const dir = path.join(__dirname, '../guilds');
-    if (!fs.existsSync(dir)) return [];
-    return fs
-        .readdirSync(dir)
-        .filter(f => f.endsWith('.json'))
-        .map(f => {
-            const gid = f.replace(/\.json$/, '');
-            const cfg = JSON.parse(fs.readFileSync(path.join(dir, f),'utf8'));
-            return { guildId: gid, config: cfg };
-        });
 }
 
 // API helpers
