@@ -55,7 +55,7 @@ module.exports = {
         // 1) Fetch live map players
         let players;
         try {
-            const res = await axios.get('https://earthpol.com/map/maps/world/live/players.json');
+            const res = await axios.get('http://192.168.1.215:8100/maps/world/live/players.json');
             players = res.data.players;
         } catch (err) {
             console.error('[Tracker] failed fetch live players', err);
