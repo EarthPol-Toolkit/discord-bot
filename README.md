@@ -27,9 +27,9 @@ DISCORD_LINK_API=https://api.earthpol.com/astra/discord
 CHAT_API=https://api.earthpol.com/astra/chat
 VOTE_API_URL=https://api.earthpol.com/astra/voting
 
-# Optional: enables /shop market, /shop traderoutes, /kitpvp, /siege, and Toolkit link buttons.
-TOOLKIT_BASE_URL=https://your-toolkit-site.example
-TOOLKIT_API_BASE=https://your-toolkit-site.example/api
+# Optional overrides. Defaults are https://earthpol.org and https://earthpol.org/api.
+TOOLKIT_BASE_URL=https://earthpol.org
+TOOLKIT_API_BASE=https://earthpol.org/api/
 
 TOOLKIT_FOOTER=EarthPol Toolkit
 SYNC_INTERVAL_MS=600000

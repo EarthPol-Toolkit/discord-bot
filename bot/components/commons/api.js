@@ -36,8 +36,7 @@ function endpointUrl(envName, path) {
 }
 
 function toolkitApiBaseUrl() {
-    const configured = env('TOOLKIT_API_BASE') || env('TOOLKIT_BASE_URL');
-    if (!configured) return null;
+    const configured = env('TOOLKIT_API_BASE') || env('TOOLKIT_BASE_URL') || 'https://earthpol.org/api';
 
     const base = stripTrailingSlash(configured);
     return base.endsWith('/api') ? base : `${base}/api`;
@@ -66,7 +65,7 @@ async function postQuery(url, query) {
 async function getToolkitJson(path, params = undefined) {
     const url = toolkitApiUrl(path);
     if (!url) {
-        throw new Error('TOOLKIT_API_BASE or TOOLKIT_BASE_URL is not configured');
+        throw new Error('Toolkit API base URL is not configured');
     }
     return getJson(url, params);
 }

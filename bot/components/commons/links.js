@@ -30,8 +30,7 @@ function mapUrl(x, z, world = 'world', zoom = 5) {
 }
 
 function toolkitBaseUrl() {
-    const base = env('TOOLKIT_BASE_URL') || env('TOOLKIT_API_BASE');
-    if (!base) return null;
+    const base = env('TOOLKIT_BASE_URL') || env('TOOLKIT_API_BASE') || 'https://earthpol.org';
 
     return String(base)
         .replace(/\/+$/, '')
