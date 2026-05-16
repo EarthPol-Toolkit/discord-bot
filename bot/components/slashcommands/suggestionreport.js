@@ -1,9 +1,9 @@
-import {
+const {
     SlashCommandBuilder,
     ChannelType,
     AttachmentBuilder,
     PermissionFlagsBits,
-} from 'discord.js';
+} = require('discord.js');
 
 const CARL_BOT_ID = process.env.CARL_BOT_ID || '235148962103951360';
 const DEFAULT_SUGGESTIONS_CHANNEL_ID = process.env.DEFAULT_SUGGESTIONS_CHANNEL_ID || null;
@@ -11,7 +11,7 @@ const DEFAULT_SUGGESTIONS_CHANNEL_ID = process.env.DEFAULT_SUGGESTIONS_CHANNEL_I
 // Hard cap to avoid runaway fetch on massive channels
 const HARD_CAP = Number(process.env.SUGGESTION_FETCH_CAP || 5000);
 
-export const data = new SlashCommandBuilder()
+const data = new SlashCommandBuilder()
     .setName('suggestionreport')
     .setDescription('Export Carl-bot suggestions in a channel to CSV and upload it here.')
     .addChannelOption(opt =>
@@ -24,7 +24,7 @@ export const data = new SlashCommandBuilder()
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild); // adjust if you want wider access
 
-export async function execute(interaction) {
+async function execute(interaction) {
     if (!interaction.inGuild()) {
         return interaction.reply({ content: 'This command can only be used in a server.', ephemeral: true });
     }
@@ -136,3 +136,5 @@ function toCsvBuffer(rows) {
     }
     return Buffer.from(lines.join('\n'), 'utf8');
 }
+
+module.exports = { data, execute };

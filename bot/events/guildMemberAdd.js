@@ -1,16 +1,8 @@
 // bot/events/guildMemberAdd.js
-const { postQuery, fetchUsernameFromPlayerDB } = require('../components/commons/api');
-const fs   = require('fs');
-const path = require('path');
+const { endpointUrl, postQuery, fetchUsernameFromPlayerDB } = require('../components/commons/api');
+const { loadConfig } = require('../utils/guildConfig');
 
-// Directory for per-guild configs
-const GUILDS_DIR = path.join(__dirname, '../guilds');
-
-function loadConfig(guildId) {
-    const file = path.join(GUILDS_DIR, `${guildId}.json`);
-    if (!fs.existsSync(file)) return null;
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-}
+const DISCORD_LINK_API = endpointUrl('DISCORD_LINK_API', 'discord');
 
 module.exports = {
     name: 'guildMemberAdd',
@@ -24,7 +16,7 @@ module.exports = {
 
         try {
             // Check for a Discord→Minecraft link
-            const link = await postQuery(process.env.DISCORD_LINK_API, [member.id]);
+            const link = await postQuery(DISCORD_LINK_API, [member.id]);
             if (!link.uuid) return;
 
             // Assign the linked role

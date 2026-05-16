@@ -57,7 +57,13 @@ for (const file of dirSync(eventsPath).filter(f => f.endsWith('.js'))) {
 }
 
 // setup REST for command registration
-token = process.env.DISCORD_TOKEN;
+const token = process.env.DISCORD_TOKEN;
+if (!token) {
+    throw new Error('DISCORD_TOKEN is required');
+}
+if (!process.env.CLIENT_ID) {
+    throw new Error('CLIENT_ID is required');
+}
 const rest = new REST().setToken(token);
 const commandData = client.commands.map(cmd => cmd.data.toJSON());
 const { startScheduler } = require('./bot/utils/syncRoles');

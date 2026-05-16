@@ -1,6 +1,8 @@
 // utils/playerCache.js
 const axios = require('axios');
-const PLAYER_API = process.env.PLAYERS_API.trim();
+const { endpointUrl } = require('../components/commons/api');
+
+const PLAYER_API = endpointUrl('PLAYERS_API', 'players');
 
 let _players = [];
 let _readyResolve;
@@ -15,12 +17,17 @@ async function refreshPlayers() {
         _readyResolve();
     } catch (err) {
         console.error('[PlayerCache] failed to fetch players', err);
+        _readyResolve();
     }
 }
 
 // initial + hourly
-refreshPlayers();
-setInterval(refreshPlayers, 60 * 60 * 1000 /** 1h **/);
+if (process.env.CHECK_COMMANDS !== '1') {
+    refreshPlayers();
+    setInterval(refreshPlayers, 60 * 60 * 1000 /** 1h **/);
+} else {
+    _readyResolve();
+}
 
 function getAllPlayers() {
     return _players;

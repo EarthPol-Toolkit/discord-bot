@@ -1,57 +1,108 @@
 // bot/components/slashcommands/toolkit.js
-import { SlashCommandBuilder } from '@discordjs/builders';
-import { EmbedBuilder }        from 'discord.js';
-import fs                      from 'fs';
-import path                    from 'path';
-import axios                   from 'axios';
-import { fileURLToPath }       from 'url';
+const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
+const { endpointUrl, getJson } = require('../commons/api');
+const fmt = require('../commons/format');
+const { loadConfig, saveConfig } = require('../../utils/guildConfig');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
-const GUILDS_DIR = path.join(__dirname, '../../guilds');
-
-// Helpers to load/save per-guild config
-function getConfigPath(guildId) {
-    if (!fs.existsSync(GUILDS_DIR)) fs.mkdirSync(GUILDS_DIR, { recursive: true });
-    return path.join(GUILDS_DIR, `${guildId}.json`);
-}
-
-function loadConfig(guildId) {
-    const file = getConfigPath(guildId);
-    if (!fs.existsSync(file)) {
-        return {
-            nation_uuid: null,
-            role_citizen_id: null,
-            role_allied_id: null,
-            role_enemy_id: null,
-            role_linked_id: null,
-            role_vote_party_id: null,
-            channel_vote_party_id: null,
-            vote_party_amount: null,
-            vote_party_notified: false,
-            toolkit_admins: { roles: [], users: [] }
-        };
-    }
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-}
-
-function saveConfig(guildId, config) {
-    fs.writeFileSync(getConfigPath(guildId), JSON.stringify(config, null, 2));
-}
-
-// Utility to extract just the ID from a mention or raw string
 function extractId(input) {
-    // matches <@123>, <@!123>, or <@&123>
-    const match = input.match(/^<@(?:&|!)?(\d+)>$/);
-    return match ? match[1] : input;
+    const match = String(input || '').match(/^<(?:(?:@(?:&|!)?)|#)(\d+)>$/);
+    return match ? match[1] : String(input || '').trim();
 }
 
-// Slash command definition
-export const data = new SlashCommandBuilder()
-    .setName('toolkit')
-    .setDescription('Configure guild-specific settings')
+async function fetchNationSummary(value) {
+    const allNations = await getJson(endpointUrl('NATIONS_API', 'nations'));
+    const wanted = String(value || '').toLowerCase();
+    const exact = allNations.find(n =>
+        String(n.name).toLowerCase() === wanted ||
+        String(n.uuid).toLowerCase() === wanted
+    );
 
-    // set command
+    if (exact) return { nation: exact, suggestions: [] };
+
+    const suggestions = allNations
+        .filter(n => String(n.name).toLowerCase().includes(wanted))
+        .slice(0, 5)
+        .map(n => n.name);
+
+    return { nation: null, suggestions };
+}
+
+async function canManageToolkit(interaction, config) {
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    const isOwner = interaction.user.id === interaction.guild.ownerId;
+    const isAdmin = config.toolkit_admins.users.includes(interaction.user.id)
+        || member.roles.cache.some(r => config.toolkit_admins.roles.includes(r.id));
+    return isOwner || isAdmin;
+}
+
+function roleMention(id) {
+    return id ? `<@&${id}>` : 'Not set';
+}
+
+function channelMention(id) {
+    return id ? `<#${id}>` : 'Not set';
+}
+
+async function buildConfigEmbed(guild, config) {
+    let nationName = 'Not set';
+    if (config.nation_uuid) {
+        try {
+            const allNations = await getJson(endpointUrl('NATIONS_API', 'nations'));
+            nationName = allNations.find(n => n.uuid === config.nation_uuid)?.name || config.nation_uuid;
+        } catch {
+            nationName = config.nation_uuid;
+        }
+    }
+
+    return new EmbedBuilder()
+        .setTitle(`Toolkit Config: ${guild.name}`)
+        .setColor(0x1ABC9C)
+        .addFields(
+            { name: 'Nation', value: nationName, inline: false },
+            {
+                name: 'Roles',
+                value: [
+                    `Citizen: ${roleMention(config.role_citizen_id)}`,
+                    `Allied: ${roleMention(config.role_allied_id)}`,
+                    `Enemy: ${roleMention(config.role_enemy_id)}`,
+                    `Linked: ${roleMention(config.role_linked_id)}`,
+                    `Vote Party: ${roleMention(config.role_vote_party_id)}`
+                ].join('\n'),
+                inline: false
+            },
+            {
+                name: 'Vote Party',
+                value: [
+                    `Channel: ${channelMention(config.channel_vote_party_id)}`,
+                    `Alert threshold: ${config.vote_party_amount ? fmt.number(config.vote_party_amount) : 'Not set'} votes remaining`,
+                    `Already notified: ${fmt.bool(config.vote_party_notified)}`
+                ].join('\n'),
+                inline: false
+            },
+            {
+                name: 'Toolkit Admins',
+                value: [
+                    `Roles: ${config.toolkit_admins.roles.length ? config.toolkit_admins.roles.map(roleMention).join(', ') : 'None'}`,
+                    `Users: ${config.toolkit_admins.users.length ? config.toolkit_admins.users.map(id => `<@${id}>`).join(', ') : 'None'}`
+                ].join('\n'),
+                inline: false
+            }
+        )
+        .setTimestamp();
+}
+
+async function findOrCreateRole(guild, name, color) {
+    const existing = guild.roles.cache.find(role => role.name === name);
+    if (existing) return existing;
+    return guild.roles.create({ name, color, reason: 'Toolkit role setup' });
+}
+
+const data = new SlashCommandBuilder()
+    .setName('toolkit')
+    .setDescription('Configure guild-specific Toolkit settings')
+    .addSubcommand(sub => sub
+        .setName('show')
+        .setDescription('Show this server Toolkit configuration'))
     .addSubcommand(sub => sub
         .setName('set')
         .setDescription('Set a configuration value')
@@ -60,197 +111,181 @@ export const data = new SlashCommandBuilder()
             .setDescription('What to set')
             .setRequired(true)
             .addChoices(
-                { name: 'Nation',            value: 'nation'       },
-                { name: 'Role: Citizen',     value: 'role_citizen' },
-                { name: 'Role: Allied',      value: 'role_allied'  },
-                { name: 'Role: Enemy',       value: 'role_enemy'   },
-                { name: 'Role: Linked',      value: 'role_linked'  },
-                { name: 'Role: Vote Party',           value: 'role_vote_party'     },
-                { name: 'Channel: Vote Party',        value: 'channel_vote_party'  },
-                { name: 'Setting: Vote Party Amount', value: 'vote_party_amount'   }
+                { name: 'Nation', value: 'nation' },
+                { name: 'Role: Citizen', value: 'role_citizen' },
+                { name: 'Role: Allied', value: 'role_allied' },
+                { name: 'Role: Enemy', value: 'role_enemy' },
+                { name: 'Role: Linked', value: 'role_linked' },
+                { name: 'Role: Vote Party', value: 'role_vote_party' },
+                { name: 'Channel: Vote Party', value: 'channel_vote_party' },
+                { name: 'Setting: Vote Party Amount', value: 'vote_party_amount' }
             ))
         .addStringOption(opt => opt
             .setName('value')
-            .setDescription('Nation name Role or Channel ID, or Amount')
+            .setDescription('Nation name, mention, ID, or amount')
             .setRequired(true)))
-
-    // createroles command
     .addSubcommand(sub => sub
         .setName('createroles')
-        .setDescription('Create Citizen, Allied, Enemy, Linked roles and save their IDs'))
-
-    // admin group
+        .setDescription('Create Toolkit roles and save their IDs'))
     .addSubcommandGroup(group => group
         .setName('admin')
         .setDescription('Manage toolkit administrators')
         .addSubcommand(sub => sub
             .setName('add')
-            .setDescription('Add a toolkit admin (role or user)')
+            .setDescription('Add a toolkit admin role or user')
             .addStringOption(opt => opt
                 .setName('type')
-                .setDescription('Role or User')
+                .setDescription('Role or user')
                 .setRequired(true)
                 .addChoices({ name: 'Role', value: 'role' }, { name: 'User', value: 'user' }))
             .addStringOption(opt => opt
                 .setName('id')
-                .setDescription('Role ID or User ID or Mention')
+                .setDescription('Role ID, user ID, or mention')
                 .setRequired(true)))
         .addSubcommand(sub => sub
             .setName('remove')
-            .setDescription('Remove a toolkit admin')
+            .setDescription('Remove a toolkit admin role or user')
             .addStringOption(opt => opt
                 .setName('type')
-                .setDescription('Role or User')
+                .setDescription('Role or user')
                 .setRequired(true)
                 .addChoices({ name: 'Role', value: 'role' }, { name: 'User', value: 'user' }))
             .addStringOption(opt => opt
                 .setName('id')
-                .setDescription('Role ID or User ID or Mention')
-                .setRequired(true))))
-;
+                .setDescription('Role ID, user ID, or mention')
+                .setRequired(true))));
 
-// Command execution
-export async function execute(interaction) {
+async function execute(interaction) {
     if (!interaction.guild) {
-        return interaction.reply({ content: '❌ This command must be used in a server.', ephemeral: true });
+        return interaction.reply({ content: 'This command must be used in a server.', ephemeral: true });
     }
+
     await interaction.deferReply({ ephemeral: true });
 
     const guildId = interaction.guild.id;
-    const config  = loadConfig(guildId);
+    const config = loadConfig(guildId);
 
-    // Permission check: server owner or toolkit_admins
-    const member = await interaction.guild.members.fetch(interaction.user.id);
-    const isOwner = interaction.user.id === interaction.guild.ownerId;
-    const isAdmin = config.toolkit_admins.users.includes(interaction.user.id)
-        || member.roles.cache.some(r => config.toolkit_admins.roles.includes(r.id));
-    if (!isOwner && !isAdmin) {
-        return interaction.editReply('❌ You do not have permission to use this command.');
+    if (!await canManageToolkit(interaction, config)) {
+        return interaction.editReply('You do not have permission to use this command.');
     }
 
-    const sub   = interaction.options.getSubcommand();
+    const sub = interaction.options.getSubcommand();
     const group = interaction.options.getSubcommandGroup(false);
 
-    // /toolkit set
+    if (sub === 'show') {
+        return interaction.editReply({ embeds: [await buildConfigEmbed(interaction.guild, config)] });
+    }
+
     if (sub === 'set') {
-        const key   = interaction.options.getString('key');
-        let   value = interaction.options.getString('value');
+        const key = interaction.options.getString('key', true);
+        const value = interaction.options.getString('value', true);
 
         if (key === 'nation') {
-            // fetch and match nations as before...
-            let allNations;
+            let match;
             try {
-                const res = await axios.get(process.env.NATIONS_API);
-                allNations = res.data;
+                match = await fetchNationSummary(value);
             } catch (err) {
-                console.error('Failed to fetch nation list:', err);
-                return interaction.editReply('❌ Could not retrieve list of nations.');
+                console.error('[Toolkit] failed to fetch nations:', err);
+                return interaction.editReply('Could not retrieve the nation list.');
             }
-            let nation = allNations.find(n => n.name.toLowerCase() === value.toLowerCase());
-            if (!nation) nation = allNations.find(n => n.uuid.toLowerCase() === value.toLowerCase());
-            if (!nation) {
-                const suggestions = allNations
-                    .filter(n => n.name.toLowerCase().includes(value.toLowerCase()))
-                    .map(n => n.name);
-                const sugText = suggestions.length ? ` Did you mean: ${suggestions.join(', ')}?` : '';
-                return interaction.editReply(`❌ Could not find nation "${value}".${sugText}`);
+
+            if (!match.nation) {
+                const sugText = match.suggestions.length
+                    ? ` Did you mean: ${match.suggestions.join(', ')}?`
+                    : '';
+                return interaction.editReply(`Could not find nation "${value}".${sugText}`);
             }
-            config.nation_uuid = nation.uuid;
+
+            config.nation_uuid = match.nation.uuid;
             saveConfig(guildId, config);
-            return interaction.editReply(`✅ Nation set to **${nation.name}** (${nation.uuid}).`);
+            return interaction.editReply(`Nation set to **${match.nation.name}** (${match.nation.uuid}).`);
         }
 
         if (key === 'channel_vote_party') {
-            const raw = interaction.options.getString('value');
-            const match = raw.match(/^<#(\d+)>$/);
-            const channelId = match ? match[1] : raw;
-
+            const channelId = extractId(value);
             config.channel_vote_party_id = channelId;
             saveConfig(guildId, config);
-            return interaction.editReply(`✅ Vote Party channel set to <#${channelId}>.`);
+            return interaction.editReply(`Vote Party channel set to <#${channelId}>.`);
         }
 
         if (key === 'vote_party_amount') {
-            const raw = interaction.options.getString('value');
-            const amount = Number(raw);
-
+            const amount = Number(value);
             if (!Number.isFinite(amount) || amount <= 0) {
-                return interaction.editReply('❌ Vote Party Amount must be a positive number (for example `10`).');
+                return interaction.editReply('Vote Party Amount must be a positive number, for example `10`.');
             }
 
             config.vote_party_amount = amount;
             saveConfig(guildId, config);
-            return interaction.editReply(`✅ Vote Party Amount set to **${amount}** votes remaining.`);
+            return interaction.editReply(`Vote Party Amount set to **${fmt.number(amount)}** votes remaining.`);
         }
 
-        // role settings
         const mapping = {
-            role_citizen    : 'role_citizen_id',
-            role_allied     : 'role_allied_id',
-            role_enemy      : 'role_enemy_id',
-            role_linked     : 'role_linked_id',
-            role_vote_party : 'role_vote_party_id'
+            role_citizen: 'role_citizen_id',
+            role_allied: 'role_allied_id',
+            role_enemy: 'role_enemy_id',
+            role_linked: 'role_linked_id',
+            role_vote_party: 'role_vote_party_id'
         };
+
         if (mapping[key]) {
-            const id = extractId(interaction.options.getString('value'));
+            const id = extractId(value);
             config[mapping[key]] = id;
             saveConfig(guildId, config);
-
-            const niceName = key === 'role_vote_party'
-                ? 'Role: Vote Party'
-                : `Role: ${key.split('_')[1].charAt(0).toUpperCase()}${key.split('_')[1].slice(1)}`;
-
-            return interaction.editReply(`✅ **${niceName}** set to <@&${id}>.`);
+            return interaction.editReply(`Saved ${key.replaceAll('_', ' ')} as <@&${id}>.`);
         }
     }
 
-    // /toolkit createroles
     if (sub === 'createroles') {
         const guild = interaction.guild;
-        // Create roles
-        const citizen = await guild.roles.create({ name: 'Citizen',     reason: 'Toolkit auto-created role' });
-        const allied   = await guild.roles.create({ name: 'Allied',      reason: 'Toolkit auto-created role' });
-        const enemy    = await guild.roles.create({ name: 'Enemy',       reason: 'Toolkit auto-created role' });
-        const linked   = await guild.roles.create({ name: 'Linked',      reason: 'Toolkit auto-created role' });
+        const citizen = await findOrCreateRole(guild, 'Citizen', 0x2ECC71);
+        const allied = await findOrCreateRole(guild, 'Allied', 0x3498DB);
+        const enemy = await findOrCreateRole(guild, 'Enemy', 0xE74C3C);
+        const linked = await findOrCreateRole(guild, 'Linked', 0x95A5A6);
+        const voteParty = await findOrCreateRole(guild, 'Vote Party', 0xF1C40F);
 
-        // Save IDs
         config.role_citizen_id = citizen.id;
-        config.role_allied_id  = allied.id;
-        config.role_enemy_id   = enemy.id;
-        config.role_linked_id  = linked.id;
+        config.role_allied_id = allied.id;
+        config.role_enemy_id = enemy.id;
+        config.role_linked_id = linked.id;
+        config.role_vote_party_id = voteParty.id;
         saveConfig(guildId, config);
 
         const embed = new EmbedBuilder()
-            .setTitle('✅ Roles Created & Saved')
+            .setTitle('Toolkit Roles Saved')
+            .setColor(0x2ECC71)
             .setDescription(
-                `• Citizen: <@&${citizen.id}>\n` +
-                `• Allied: <@&${allied.id}>\n` +
-                `• Enemy: <@&${enemy.id}>\n` +
-                `• Linked: <@&${linked.id}>`
+                [
+                    `Citizen: <@&${citizen.id}>`,
+                    `Allied: <@&${allied.id}>`,
+                    `Enemy: <@&${enemy.id}>`,
+                    `Linked: <@&${linked.id}>`,
+                    `Vote Party: <@&${voteParty.id}>`
+                ].join('\n')
             )
-            .setColor(0x00FF00)
             .setTimestamp();
 
         return interaction.editReply({ embeds: [embed] });
     }
 
-    // /toolkit admin add/remove
     if (group === 'admin') {
-        const act  = sub; // 'add' or 'remove'
-        const type = interaction.options.getString('type');
-        let   id   = extractId(interaction.options.getString('id'));
-        const list = config.toolkit_admins[type === 'role' ? 'roles' : 'users'];
+        const action = sub;
+        const type = interaction.options.getString('type', true);
+        const id = extractId(interaction.options.getString('id', true));
+        const key = type === 'role' ? 'roles' : 'users';
+        const list = config.toolkit_admins[key];
 
-        if (act === 'add') {
+        if (action === 'add') {
             if (!list.includes(id)) list.push(id);
             saveConfig(guildId, config);
-            return interaction.editReply(`✅ Added ${type} <@${type === 'role' ? '&' : ''}${id}> to toolkit admins.`);
-        } else {
-            config.toolkit_admins[type === 'role' ? 'roles' : 'users'] = list.filter(x => x !== id);
-            saveConfig(guildId, config);
-            return interaction.editReply(`✅ Removed ${type} <@${type === 'role' ? '&' : ''}${id}> from toolkit admins.`);
+            return interaction.editReply(`Added ${type} <@${type === 'role' ? '&' : ''}${id}> to toolkit admins.`);
         }
+
+        config.toolkit_admins[key] = list.filter(x => x !== id);
+        saveConfig(guildId, config);
+        return interaction.editReply(`Removed ${type} <@${type === 'role' ? '&' : ''}${id}> from toolkit admins.`);
     }
 
-    return interaction.editReply('❌ Unknown subcommand.');
+    return interaction.editReply('Unknown subcommand.');
 }
+
+module.exports = { data, execute };

@@ -1,41 +1,11 @@
 // bot/utils/votePartyMonitor.js
-const fs    = require('fs');
-const path  = require('path');
 const axios = require('axios');
+const { endpointUrl } = require('../components/commons/api');
+const { loadAllConfigs, saveConfig } = require('./guildConfig');
 
-const GUILDS_DIR = path.join(__dirname, '../guilds');
-
-const VOTE_API_URL = process.env.VOTE_API_URL || 'https://api.earthpol.com/astra/voting';
+const VOTE_API_URL = endpointUrl('VOTE_API_URL', 'voting');
 
 const VOTE_PARTY_INTERVAL_MS = 60 * 1000;
-
-function loadAllGuildConfigs() {
-    if (!fs.existsSync(GUILDS_DIR)) return [];
-
-    return fs.readdirSync(GUILDS_DIR)
-        .filter(f => f.endsWith('.json'))
-        .map(file => {
-            const guildId = path.basename(file, '.json');
-            try {
-                const cfg = JSON.parse(
-                    fs.readFileSync(path.join(GUILDS_DIR, file), 'utf8')
-                );
-                return { guildId, config: cfg };
-            } catch (err) {
-                console.error(`❌ Failed to parse config for guild ${file}:`, err.message);
-                return null;
-            }
-        })
-        .filter(Boolean);
-}
-
-function saveGuildConfig(guildId, config) {
-    if (!fs.existsSync(GUILDS_DIR)) {
-        fs.mkdirSync(GUILDS_DIR, { recursive: true });
-    }
-    const file = path.join(GUILDS_DIR, `${guildId}.json`);
-    fs.writeFileSync(file, JSON.stringify(config, null, 2));
-}
 
 async function fetchVotingStats() {
     const res = await axios.get(VOTE_API_URL, { timeout: 5000 });
@@ -59,7 +29,7 @@ async function checkVoteParty(client) {
         return;
     }
 
-    const configs = loadAllGuildConfigs();
+    const configs = loadAllConfigs();
     if (configs.length === 0) return;
 
     for (const { guildId, config } of configs) {
@@ -82,7 +52,7 @@ async function checkVoteParty(client) {
         if (votesNeeded > threshold) {
             if (config.vote_party_notified) {
                 config.vote_party_notified = false;
-                saveGuildConfig(guildId, config);
+                saveConfig(guildId, config);
             }
             continue;
         }
@@ -108,7 +78,7 @@ async function checkVoteParty(client) {
             await channel.send({ content: msg });
 
             config.vote_party_notified = true;
-            saveGuildConfig(guildId, config);
+            saveConfig(guildId, config);
 
             console.log(`📣 Sent vote party alert to guild ${guild.name} (${guild.id})`);
         } catch (err) {

@@ -1,9 +1,12 @@
 const axios = require('axios');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { postQuery } = require('../components/commons/api');
+const { endpointUrl, postQuery } = require('../components/commons/api');
+const fmt = require('../components/commons/format');
 const shopCmd      = require('../components/slashcommands/shop');
-const { ownerNames, ownerUUIDs } = shopCmd;
 
+const SHOP_API = endpointUrl('SHOP_API', 'shops');
+const LOCATION_API = endpointUrl('LOCATION_API', 'location');
+const PLAYERS_API = endpointUrl('PLAYERS_API', 'players');
 
 module.exports = {
     name: 'interactionCreate',
@@ -16,7 +19,7 @@ module.exports = {
             const pageSize    = 3;
 
             // fetch & sort
-            const { data: shops } = await axios.get(process.env.SHOP_API);
+            const { data: shops } = await axios.get(SHOP_API);
             shops.sort((a, b) => b.price - a.price);
 
             // calculate new page
@@ -25,10 +28,10 @@ module.exports = {
             const ids     = slice.map(s => s.id);
 
             // batch fetch details
-            const details   = await postQuery(process.env.SHOP_API,     ids.map(String));
+            const details   = await postQuery(SHOP_API,     ids.map(String));
             const coords    = details.map(d => [ Math.floor(d.location.x), Math.floor(d.location.z) ]);
-            const locations = await postQuery(process.env.LOCATION_API, coords);
-            const owners    = await postQuery(process.env.PLAYERS_API,   details.map(d => d.owner));
+            const locations = await postQuery(LOCATION_API, coords);
+            const owners    = await postQuery(PLAYERS_API,   details.map(d => d.owner));
 
             // rebuild embed
             const embed = new EmbedBuilder()
@@ -36,8 +39,8 @@ module.exports = {
                 .setColor(0x1ABC9C);
 
             for (const d of details) {
-                const itemDisplay = d.item.match(/ItemStack\{(.+)\}/)?.[1] || d.item;
-                const priceG      = `${d.price}G`;
+                const itemDisplay = fmt.cleanItemStack(d.item);
+                const priceG      = fmt.gold(d.price);
 
                 // town/nation/owner
                 const locRec = locations.find(l =>
@@ -88,7 +91,7 @@ module.exports = {
             const pageSize = 3;
 
             // fetch & sort shops by this owner
-            const { data: shops } = await axios.get(process.env.SHOP_API);
+            const { data: shops } = await axios.get(SHOP_API);
             const filtered = shops
                 .filter(s => s.owner === uuid)
                 .sort((a, b) => b.price - a.price);
@@ -99,21 +102,21 @@ module.exports = {
             const ids     = slice.map(s => s.id);
 
             // fetch details, locations, owners
-            const details   = await postQuery(process.env.SHOP_API,     ids.map(String));
+            const details   = await postQuery(SHOP_API,     ids.map(String));
             const coords    = details.map(d => [ Math.floor(d.location.x), Math.floor(d.location.z) ]);
-            const locations = await postQuery(process.env.LOCATION_API, coords);
-            const owners    = await postQuery(process.env.PLAYERS_API,   details.map(d => d.owner));
+            const locations = await postQuery(LOCATION_API, coords);
+            const owners    = await postQuery(PLAYERS_API,   details.map(d => d.owner));
 
             // build embed
-            const ownerIndex = ownerUUIDs.indexOf(uuid);
-            const ownerName  = ownerIndex !== -1 ? ownerNames[ownerIndex] : uuid;
+            const ownerIndex = shopCmd.ownerUUIDs.indexOf(uuid);
+            const ownerName  = ownerIndex !== -1 ? shopCmd.ownerNames[ownerIndex] : uuid;
             const embed = new EmbedBuilder()
                 .setTitle(`Shops by ${ownerName} (page ${newPage + 1})`)
                 .setColor(0x1ABC9C);
 
             for (const d of details) {
-                const itemDisplay = d.item.match(/ItemStack\{(.+)\}/)?.[1] || d.item;
-                const priceG      = `${d.price}G`;
+                const itemDisplay = fmt.cleanItemStack(d.item);
+                const priceG      = fmt.gold(d.price);
                 const locRec      = locations.find(l =>
                     l.location.x === Math.floor(d.location.x) &&
                     l.location.z === Math.floor(d.location.z)

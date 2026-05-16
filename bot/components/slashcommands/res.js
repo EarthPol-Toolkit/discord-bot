@@ -1,10 +1,18 @@
 // bot/components/slashcommands/res.js
-const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder }        = require('discord.js');
+const {
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    EmbedBuilder,
+    SlashCommandBuilder
+} = require('discord.js');
 const axios                   = require('axios');
+const { endpointUrl }         = require('../commons/api');
+const fmt                     = require('../commons/format');
+const { nationFlagUrl, playerBustUrl, toolkitUrl } = require('../commons/links');
 
-const PLAYERS_API      = process.env.PLAYERS_API       || 'https://api.earthpol.com/astra/players';
-const PLAYERS_LIST_API = process.env.PLAYERS_LIST_API  || PLAYERS_API; // or your “list all” endpoint
+const PLAYERS_API      = endpointUrl('PLAYERS_API', 'players');
+const PLAYERS_LIST_API = process.env.PLAYERS_LIST_API  || PLAYERS_API;
 
 // In‑memory cache of player names for autocomplete
 let playerNames = [];
@@ -21,8 +29,10 @@ async function loadPlayerNames() {
     }
 }
 // …and refresh every hour
-loadPlayerNames();
-setInterval(loadPlayerNames, 60 * 60 * 1000);
+if (process.env.CHECK_COMMANDS !== '1') {
+    loadPlayerNames();
+    setInterval(loadPlayerNames, 60 * 60 * 1000);
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -62,29 +72,51 @@ module.exports = {
         }
 
         const embed = new EmbedBuilder()
-            .setTitle(`🔍 Resident: ${data.name}`)
+            .setTitle(`Resident: ${data.name}`)
             .setColor(0x00AAFF)
+            .setThumbnail(playerBustUrl(data.name))
             .addFields(
                 { name: 'UUID',          value: data.uuid, inline: true },
                 { name: 'Display Name',  value: data.formattedName || '—', inline: true },
                 { name: 'Title',         value: data.title         || '—', inline: true },
                 { name: 'Surname',       value: data.surname       || '—', inline: true },
-                { name: 'About',         value: data.about         || '—', inline: false },
+                { name: 'About',         value: fmt.truncate(data.about || '—', 500), inline: false },
                 { name: 'Town',          value: data.town?.name    || '—', inline: true },
                 { name: 'Nation',        value: data.nation?.name  || '—', inline: true },
                 { name: 'Registered',    value: data.timestamps?.registered
-                        ? new Date(data.timestamps.registered).toLocaleString()
+                        ? fmt.timestamp(data.timestamps.registered, 'D')
                         : '—',
                     inline: true },
                 { name: 'Last Online',   value: data.timestamps?.lastOnline
-                        ? new Date(data.timestamps.lastOnline).toLocaleString()
+                        ? fmt.timestamp(data.timestamps.lastOnline, 'R')
                         : '—',
                     inline: true },
-                { name: 'Balance',       value: `${data.stats?.balance ?? 0}`, inline: true },
-                { name: 'Friends',       value: `${data.stats?.numFriends ?? 0}`, inline: true }
+                { name: 'Balance',       value: fmt.gold(data.stats?.balance), inline: true },
+                { name: 'Friends',       value: fmt.number(data.stats?.numFriends ?? 0), inline: true }
             )
             .setTimestamp();
 
-        return interaction.editReply({ embeds: [embed] });
+        const flag = nationFlagUrl(data.nation?.name);
+        if (flag) embed.setImage(flag);
+
+        const buttons = [];
+        const profileUrl = toolkitUrl('/players', { u: data.uuid });
+        if (profileUrl) {
+            buttons.push(
+                new ButtonBuilder()
+                    .setLabel('Open Toolkit')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL(profileUrl)
+            );
+        }
+        buttons.push(
+            new ButtonBuilder()
+                .setLabel('Ban History')
+                .setStyle(ButtonStyle.Link)
+                .setURL(`https://bans.earthpol.com/history.php?uuid=${encodeURIComponent(data.uuid.replaceAll('-', ''))}`)
+        );
+
+        const components = buttons.length ? [new ActionRowBuilder().addComponents(buttons)] : [];
+        return interaction.editReply({ embeds: [embed], components });
     }
 };

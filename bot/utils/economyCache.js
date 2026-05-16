@@ -1,12 +1,12 @@
 // utils/economyCache.js
-const { postQuery }     = require('../components/commons/api');
+const { endpointUrl, postQuery } = require('../components/commons/api');
 const { getAllPlayers, waitReady: waitPlayers } = require('./playerCache');
-const { getAllTowns       } = require('./townCache');
+const { getAllTowns, waitReady: waitTowns } = require('./townCache');
 const { getAllNations, waitReady: waitNations } = require('./nationCache');
 
-const PLAYER_API = process.env.PLAYERS_API.trim();
-const TOWN_API   = process.env.TOWNS_API.trim();
-const NATION_API = process.env.NATIONS_API.trim();
+const PLAYER_API = endpointUrl('PLAYERS_API', 'players');
+const TOWN_API   = endpointUrl('TOWNS_API', 'towns');
+const NATION_API = endpointUrl('NATIONS_API', 'nations');
 
 function chunkArray(arr, size = 20) {
     const out = [];
@@ -47,7 +47,7 @@ const readyPromise = new Promise(r => _readyResolve = r);
 async function refreshCache() {
     try {
         // wait for player & nation caches first
-        await Promise.all([ waitPlayers(), waitNations() ]);
+        await Promise.all([ waitPlayers(), waitTowns(), waitNations() ]);
         console.log('[EconomyCache] starting full refresh');
 
         const playerIds = getAllPlayers().map(p => p.uuid);
@@ -75,8 +75,12 @@ async function refreshCache() {
 }
 
 // kick off + hourly
-refreshCache();
-setInterval(refreshCache, 60 * 60 * 1000);
+if (process.env.CHECK_COMMANDS !== '1') {
+    refreshCache();
+    setInterval(refreshCache, 60 * 60 * 1000);
+} else {
+    _readyResolve();
+}
 
 function getEconomyCache() {
     return cache;
